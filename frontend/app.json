@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "PicBox Inventory",
+    "slug": "picbox-inventory",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logos/app-icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logos/app-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/logos/app-icon.png"
+    }
+  }
+}

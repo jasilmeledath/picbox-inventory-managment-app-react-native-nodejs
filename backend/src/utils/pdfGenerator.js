@@ -1,0 +1,619 @@
+const puppeteer = require('puppeteer');
+const QRCode = require('qrcode');
+const path = require('path');
+const fs = require('fs').promises;
+
+/**
+ * Generate UPI QR code as base64
+ */
+async function generateUPIQRCode(upiId, payeeName, amount) {
+  try {
+    // UPI payment URI format
+    const upiString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR`;
+    
+    // Generate QR code as data URL
+    const qrCodeDataURL = await QRCode.toDataURL(upiString, {
+      width: 200,
+      margin: 1,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+    
+    return qrCodeDataURL;
+  } catch (error) {
+    console.error('QR Code generation error:', error);
+    return null;
+  }
+}
+
+/**
+ * Format currency in Indian Rupee format
+ */
+function formatCurrency(amount) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2
+  }).format(amount);
+}
+
+/**
+ * Format date
+ */
+function formatDate(date) {
+  return new Date(date).toLocaleDateString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+/**
+ * Generate Invoice PDF HTML Template
+ */
+async function generateInvoiceHTML(invoice, companyCredential) {
+  const {
+    invoice_number,
+    brand_type,
+    customer_name,
+    event_name,
+    rented_items,
+    total_amount,
+    paid_amount,
+    pending_amount,
+    status,
+    date
+  } = invoice;
+
+  // Calculate subtotal and tax if applicable
+  const subtotal = total_amount;
+  const gstRate = 18; // 18% GST
+  const gstAmount = 0; // Not calculating GST separately for now
+  
+  // Generate UPI QR Code if UPI details exist
+  let qrCodeDataURL = null;
+  if (companyCredential.upi_details?.upi_id && pending_amount > 0) {
+    qrCodeDataURL = await generateUPIQRCode(
+      companyCredential.upi_details.upi_id,
+      companyCredential.upi_details.payee_name || companyCredential.display_name,
+      pending_amount
+    );
+  }
+
+  // Generate items rows HTML
+  const itemsHTML = rented_items.map((item, index) => {
+    const amount = item.qty * item.rate;
+    return `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.name}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.qty}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.rate)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(amount)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Determine brand color
+  const brandColor = brand_type === 'Picbox' ? '#7C3AED' : '#8B5CF6';
+  
+  // Status badge color
+  const statusColors = {
+    'draft': '#6B7280',
+    'estimate': '#F59E0B',
+    'final': '#10B981'
+  };
+  const statusColor = statusColors[status] || '#6B7280';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1f2937;
+      background: #ffffff;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid ${brandColor};
+    }
+    
+    .company-info {
+      flex: 1;
+    }
+    
+    .company-logo {
+      max-width: 200px;
+      height: auto;
+      margin-bottom: 15px;
+    }
+    
+    .company-name {
+      font-size: 28px;
+      font-weight: bold;
+      color: ${brandColor};
+      margin-bottom: 8px;
+    }
+    
+    .company-address {
+      font-size: 12px;
+      color: #6b7280;
+      line-height: 1.8;
+    }
+    
+    .invoice-info {
+      text-align: right;
+    }
+    
+    .invoice-title {
+      font-size: 32px;
+      font-weight: bold;
+      color: ${brandColor};
+      margin-bottom: 10px;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: ${statusColor};
+      color: white;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 15px;
+    }
+    
+    .invoice-details {
+      font-size: 13px;
+    }
+    
+    .invoice-detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    
+    .label {
+      font-weight: 600;
+      color: #4b5563;
+    }
+    
+    .value {
+      color: #1f2937;
+    }
+    
+    .section {
+      margin-bottom: 30px;
+    }
+    
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1f2937;
+      background: #f3f4f6;
+      padding: 10px 15px;
+      margin-bottom: 15px;
+      border-left: 4px solid ${brandColor};
+    }
+    
+    .bill-to {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .customer-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 5px;
+    }
+    
+    .event-name {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    
+    thead {
+      background: ${brandColor};
+      color: white;
+    }
+    
+    thead th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    
+    tbody tr:hover {
+      background: #f9fafb;
+    }
+    
+    .summary-table {
+      margin-top: 30px;
+      float: right;
+      width: 350px;
+    }
+    
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 15px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .summary-row.total {
+      background: ${brandColor};
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      margin-top: 10px;
+    }
+    
+    .summary-row.paid {
+      background: #d1fae5;
+      color: #065f46;
+      font-weight: 600;
+    }
+    
+    .summary-row.pending {
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: 600;
+    }
+    
+    .payment-section {
+      clear: both;
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    
+    .payment-info {
+      flex: 1;
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .payment-info h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: ${brandColor};
+      margin-bottom: 15px;
+    }
+    
+    .payment-detail {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    
+    .qr-section {
+      width: 200px;
+      text-align: center;
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      border: 2px dashed ${brandColor};
+    }
+    
+    .qr-code {
+      width: 160px;
+      height: 160px;
+      margin: 10px auto;
+    }
+    
+    .qr-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: ${brandColor};
+      margin-bottom: 10px;
+    }
+    
+    .qr-amount {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-top: 10px;
+    }
+    
+    .footer {
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    .contact-info {
+      margin-bottom: 15px;
+      line-height: 2;
+    }
+    
+    .contact-info strong {
+      color: ${brandColor};
+    }
+    
+    .thank-you {
+      font-size: 16px;
+      font-weight: 600;
+      color: ${brandColor};
+      font-style: italic;
+      margin-top: 20px;
+    }
+    
+    .notes {
+      background: #fffbeb;
+      padding: 15px;
+      border-left: 4px solid #f59e0b;
+      margin-top: 30px;
+      font-size: 12px;
+      color: #78350f;
+    }
+    
+    @media print {
+      .container {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="company-info">
+        ${companyCredential.logo?.url ? `<img src="${companyCredential.logo.url}" alt="${companyCredential.display_name}" class="company-logo">` : `<div class="company-name">${companyCredential.display_name}</div>`}
+        <div class="company-address">
+          ${companyCredential.address.line1}<br>
+          ${companyCredential.address.line2 ? companyCredential.address.line2 + '<br>' : ''}
+          ${companyCredential.address.city}, ${companyCredential.address.state} - ${companyCredential.address.pincode}<br>
+          ${companyCredential.tax_details?.gstin ? `<strong>GSTIN:</strong> ${companyCredential.tax_details.gstin}` : ''}
+        </div>
+      </div>
+      
+      <div class="invoice-info">
+        <div class="invoice-title">INVOICE</div>
+        <div class="status-badge">${status.toUpperCase()}</div>
+        <div class="invoice-details">
+          <div class="invoice-detail-row">
+            <span class="label">Invoice #:</span>
+            <span class="value">${invoice_number}</span>
+          </div>
+          <div class="invoice-detail-row">
+            <span class="label">Date:</span>
+            <span class="value">${formatDate(date)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Bill To Section -->
+    <div class="section">
+      <div class="section-title">BILL TO</div>
+      <div class="bill-to">
+        <div class="customer-name">${customer_name}</div>
+        ${event_name ? `<div class="event-name">Event: ${event_name}</div>` : ''}
+      </div>
+    </div>
+    
+    <!-- Items Table -->
+    <div class="section">
+      <div class="section-title">DESCRIPTION</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th>Item Description</th>
+            <th style="width: 100px; text-align: center;">Qty</th>
+            <th style="width: 120px; text-align: right;">Unit Price</th>
+            <th style="width: 120px; text-align: right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Summary -->
+    <div class="summary-table">
+      <div class="summary-row">
+        <span>Subtotal:</span>
+        <span>${formatCurrency(subtotal)}</span>
+      </div>
+      ${gstAmount > 0 ? `
+      <div class="summary-row">
+        <span>GST (${gstRate}%):</span>
+        <span>${formatCurrency(gstAmount)}</span>
+      </div>
+      ` : ''}
+      <div class="summary-row total">
+        <span>TOTAL:</span>
+        <span>${formatCurrency(total_amount)}</span>
+      </div>
+      ${paid_amount > 0 ? `
+      <div class="summary-row paid">
+        <span>Paid:</span>
+        <span>${formatCurrency(paid_amount)}</span>
+      </div>
+      ` : ''}
+      ${pending_amount > 0 ? `
+      <div class="summary-row pending">
+        <span>Balance Due:</span>
+        <span>${formatCurrency(pending_amount)}</span>
+      </div>
+      ` : ''}
+    </div>
+    
+    <!-- Payment Details -->
+    <div class="payment-section">
+      <div class="payment-info">
+        <h3>💳 Bank Details</h3>
+        ${companyCredential.bank_details?.account_name ? `
+        <div class="payment-detail">
+          <span class="label">Account Name:</span>
+          <span>${companyCredential.bank_details.account_name}</span>
+        </div>
+        ` : ''}
+        ${companyCredential.bank_details?.account_number ? `
+        <div class="payment-detail">
+          <span class="label">Account Number:</span>
+          <span>${companyCredential.bank_details.account_number}</span>
+        </div>
+        ` : ''}
+        ${companyCredential.bank_details?.ifsc_code ? `
+        <div class="payment-detail">
+          <span class="label">IFSC Code:</span>
+          <span>${companyCredential.bank_details.ifsc_code}</span>
+        </div>
+        ` : ''}
+        ${companyCredential.bank_details?.bank_name ? `
+        <div class="payment-detail">
+          <span class="label">Bank:</span>
+          <span>${companyCredential.bank_details.bank_name}</span>
+        </div>
+        ` : ''}
+        ${companyCredential.bank_details?.branch ? `
+        <div class="payment-detail">
+          <span class="label">Branch:</span>
+          <span>${companyCredential.bank_details.branch}</span>
+        </div>
+        ` : ''}
+        
+        ${companyCredential.upi_details?.upi_id ? `
+        <h3 style="margin-top: 20px;">📱 UPI Payment</h3>
+        <div class="payment-detail">
+          <span class="label">UPI ID:</span>
+          <span>${companyCredential.upi_details.upi_id}</span>
+        </div>
+        ${companyCredential.upi_details.google_pay_number ? `
+        <div class="payment-detail">
+          <span class="label">Google Pay:</span>
+          <span>${companyCredential.upi_details.google_pay_number}</span>
+        </div>
+        ` : ''}
+        ` : ''}
+      </div>
+      
+      ${qrCodeDataURL && pending_amount > 0 ? `
+      <div class="qr-section">
+        <div class="qr-label">SCAN TO PAY</div>
+        <img src="${qrCodeDataURL}" alt="UPI QR Code" class="qr-code">
+        <div class="qr-amount">${formatCurrency(pending_amount)}</div>
+      </div>
+      ` : ''}
+    </div>
+    
+    ${status === 'estimate' ? `
+    <div class="notes">
+      <strong>Note:</strong> This is an estimate/quotation. Please include the invoice number (#${invoice_number}) in your payment communication.
+    </div>
+    ` : ''}
+    
+    <!-- Footer -->
+    <div class="footer">
+      <div class="contact-info">
+        ${companyCredential.contact.primary_phone ? `<strong>Phone:</strong> ${companyCredential.contact.primary_phone}` : ''}
+        ${companyCredential.contact.alternate_phone ? ` | ${companyCredential.contact.alternate_phone}` : ''}<br>
+        ${companyCredential.contact.email ? `<strong>Email:</strong> ${companyCredential.contact.email}` : ''}
+      </div>
+      <div class="thank-you">Thank You For Your Business!</div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  return html;
+}
+
+/**
+ * Generate PDF from Invoice
+ */
+async function generateInvoicePDF(invoice, companyCredential) {
+  let browser;
+  
+  try {
+    // Generate HTML
+    const html = await generateInvoiceHTML(invoice, companyCredential);
+    
+    // Launch browser
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    
+    // Set content
+    await page.setContent(html, {
+      waitUntil: 'networkidle0'
+    });
+    
+    // Generate PDF
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px'
+      }
+    });
+    
+    await browser.close();
+    
+    return pdfBuffer;
+  } catch (error) {
+    if (browser) {
+      await browser.close();
+    }
+    throw error;
+  }
+}
+
+module.exports = {
+  generateInvoicePDF,
+  generateUPIQRCode
+};
