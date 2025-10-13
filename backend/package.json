@@ -9,6 +9,7 @@
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "seed": "node src/scripts/seed.js",
+    "seed:admin": "node src/scripts/seedAdmin.js",
     "lint": "eslint src/**/*.js"
   },
   "keywords": [

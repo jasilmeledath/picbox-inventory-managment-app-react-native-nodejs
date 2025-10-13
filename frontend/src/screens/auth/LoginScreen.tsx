@@ -90,13 +90,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleDemoLogin = () => {
-    setEmail('admin@picbox.com');
-    setPassword('admin123');
-    setEmailError('');
-    setPasswordError('');
-  };
-
   const handleSaveApiUrl = async () => {
     if (!apiUrl.trim()) {
       Alert.alert('Error', 'Please enter a valid API URL');
@@ -215,28 +208,7 @@ export default function LoginScreen() {
             disabled={isLoading}
             style={styles.loginButton}
           />
-
-          {/* Demo Credentials Button */}
-          <TouchableOpacity
-            onPress={handleDemoLogin}
-            disabled={isLoading}
-            style={styles.demoButton}
-          >
-            <Text style={styles.demoButtonText}>
-              Use Demo Credentials
-            </Text>
-          </TouchableOpacity>
         </Card>
-
-        {/* Demo Info */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>🔐 Demo Credentials</Text>
-          <Text style={styles.infoText}>Email: admin@picbox.com</Text>
-          <Text style={styles.infoText}>Password: admin123</Text>
-          <Text style={styles.infoNote}>
-            (Make sure backend server is running)
-          </Text>
-        </View>
 
         {/* Footer */}
         <Text style={styles.footer}>
@@ -392,16 +364,6 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginTop: spacing.md,
-  },
-  demoButton: {
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    alignItems: 'center',
-  },
-  demoButtonText: {
-    ...typography.body,
-    color: colors.accent,
-    fontWeight: '600',
   },
   infoBox: {
     backgroundColor: colors.primary + '10',
