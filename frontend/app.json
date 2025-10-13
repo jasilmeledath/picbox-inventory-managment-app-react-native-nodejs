@@ -3,7 +3,7 @@
     "name": "PicBox Inventory",
     "slug": "picbox-inventory",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/logos/app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -13,18 +13,44 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.echosounds.picbox"
     },
     "android": {
+      "package": "com.echosounds.picbox",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/logos/app-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/logos/app-icon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-will-be-generated"
+      }
     }
   }
 }
