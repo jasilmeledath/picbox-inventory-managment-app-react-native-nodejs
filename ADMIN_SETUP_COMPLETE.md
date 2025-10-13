@@ -105,13 +105,13 @@ npm run seed:admin
 ### Verify Database:
 ```bash
 # Connect to MongoDB
-mongosh "mongodb+srv://picboxecho_db_user:mItdHR0FzIFhjvDt@picboxapp.oollr5p.mongodb.net/"
 
 # Switch to database
 use picbox
 
 # Find admin user
 db.users.findOne({ email: "navas@echosounds.com" })
+
 ```
 
 ---
