@@ -124,8 +124,8 @@ const companyCredentialSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for quick lookup
-companyCredentialSchema.index({ company_name: 1 });
+// Index for quick lookup - company_name already has unique index
+// companyCredentialSchema.index({ company_name: 1 }); // Removed: duplicate of unique constraint
 companyCredentialSchema.index({ is_active: 1 });
 
 module.exports = mongoose.model('CompanyCredential', companyCredentialSchema);
