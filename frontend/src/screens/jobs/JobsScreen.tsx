@@ -10,7 +10,9 @@ import {
   ScrollView,
   TextInput,
   SafeAreaView,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, shadows } from '../../theme';
 import Card from '../../components/common/Card';
@@ -32,6 +34,7 @@ export default function JobsScreen() {
   
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,11 +87,20 @@ export default function JobsScreen() {
 
   const [errors, setErrors] = useState<any>({});
 
+  // Initial load
   useEffect(() => {
     loadJobs();
     fetchEmployees();
     fetchProducts();
   }, []);
+
+  // Refresh when screen comes into focus (fixes employee wages not updating)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadJobs();
+      fetchEmployees(); // Refresh employees to get updated pending salary
+    }, [])
+  );
 
   const loadJobs = async () => {
     setIsLoading(true);
@@ -99,6 +111,22 @@ export default function JobsScreen() {
       console.error('Failed to load jobs:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Pull to refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadJobs(),
+        fetchEmployees(),
+        fetchProducts(),
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -549,6 +577,14 @@ export default function JobsScreen() {
         renderItem={renderJob}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="briefcase-outline" size={64} color={colors.textSecondary} />

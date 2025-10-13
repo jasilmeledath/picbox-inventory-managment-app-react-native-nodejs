@@ -17,20 +17,41 @@ exports.createInvoice = async (req, res) => {
       customer_name,
       event_name,
       rented_items,
-      total_amount,
+      discount,
+      discount_percentage,
       paid_amount,
       status,
       date,
       company_credentials
     } = req.body;
 
+    // Calculate subtotal from items
+    const subtotal = rented_items.reduce((sum, item) => {
+      return sum + (item.qty * item.rate);
+    }, 0);
+
+    // Calculate discount amount
+    let discountAmount = discount || 0;
+    if (discount_percentage && discount_percentage > 0) {
+      discountAmount = (subtotal * discount_percentage) / 100;
+    }
+
+    // Calculate total amount
+    const total_amount = subtotal - discountAmount;
+    const paidAmt = paid_amount || 0;
+    const pending_amount = total_amount - paidAmt;
+
     const invoice = new Invoice({
       brand_type,
       customer_name,
       event_name,
       rented_items,
+      subtotal,
+      discount: discountAmount,
+      discount_percentage: discount_percentage || 0,
       total_amount,
-      paid_amount: paid_amount || 0,
+      paid_amount: paidAmt,
+      pending_amount,
       status: status || 'draft',
       date: date || new Date(),
       company_credentials
@@ -38,7 +59,7 @@ exports.createInvoice = async (req, res) => {
 
     await invoice.save();
 
-    logger.info(`Invoice created for ${customer_name}`);
+    logger.info(`Invoice created for ${customer_name} - Subtotal: ${subtotal}, Discount: ${discountAmount}, Total: ${total_amount}`);
 
     res.status(201).json({
       success: true,
@@ -160,7 +181,7 @@ exports.updateInvoice = async (req, res) => {
     // Update allowed fields
     const allowedFields = [
       'brand_type', 'customer_name', 'event_name', 'rented_items',
-      'total_amount', 'paid_amount', 'status', 'date', 'company_credentials'
+      'discount', 'discount_percentage', 'paid_amount', 'status', 'date', 'company_credentials'
     ];
 
     allowedFields.forEach(field => {
@@ -168,6 +189,26 @@ exports.updateInvoice = async (req, res) => {
         invoice[field] = req.body[field];
       }
     });
+
+    // Recalculate amounts if items or discount changed
+    if (req.body.rented_items || req.body.discount !== undefined || req.body.discount_percentage !== undefined) {
+      const subtotal = invoice.rented_items.reduce((sum, item) => {
+        return sum + (item.qty * item.rate);
+      }, 0);
+
+      invoice.subtotal = subtotal;
+
+      // Calculate discount amount
+      let discountAmount = invoice.discount || 0;
+      if (invoice.discount_percentage && invoice.discount_percentage > 0) {
+        discountAmount = (subtotal * invoice.discount_percentage) / 100;
+        invoice.discount = discountAmount;
+      }
+
+      // Calculate total and pending
+      invoice.total_amount = subtotal - discountAmount;
+      invoice.pending_amount = invoice.total_amount - (invoice.paid_amount || 0);
+    }
 
     await invoice.save();
 
@@ -236,17 +277,29 @@ exports.deleteInvoice = async (req, res) => {
  * @route   POST /api/invoices/:id/generate-pdf
  * @access  Private
  */
+/**
+ * @desc    Generate and download invoice PDF
+ * @route   GET/POST /api/invoices/:id/generate-pdf
+ * @access  Private
+ */
 exports.generatePDF = async (req, res) => {
   try {
+    logger.info(`=== PDF Generation Started ===`);
+    logger.info(`Invoice ID: ${req.params.id}`);
+    logger.info(`Method: ${req.method}`);
+    
     const invoice = await Invoice.findById(req.params.id)
       .populate('rented_items.product_id', 'name sku');
 
     if (!invoice) {
+      logger.error(`Invoice not found: ${req.params.id}`);
       return res.status(404).json({
         success: false,
         message: 'Invoice not found'
       });
     }
+
+    logger.info(`Found invoice #${invoice.invoice_number} for ${invoice.customer_name}`);
 
     // Get company credentials based on brand_type
     const companyCredential = await CompanyCredential.findOne({
@@ -255,68 +308,43 @@ exports.generatePDF = async (req, res) => {
     });
 
     if (!companyCredential) {
+      logger.error(`Company credentials not found for ${invoice.brand_type}`);
       return res.status(404).json({
         success: false,
         message: `Company credentials not found for ${invoice.brand_type}. Please configure company details first.`
       });
     }
 
+    logger.info(`Found company credentials for ${invoice.brand_type}`);
+
     // Generate PDF
     logger.info(`Generating PDF for invoice ${invoice.invoice_number}...`);
     const pdfBuffer = await generateInvoicePDF(invoice.toObject(), companyCredential.toObject());
 
-    // Delete old PDF from Cloudinary if exists
-    if (invoice.pdf && invoice.pdf.public_id) {
-      try {
-        await deleteFromCloudinary(invoice.pdf.public_id);
-      } catch (error) {
-        logger.warn('Failed to delete old PDF:', error);
-      }
-    }
+    logger.info(`PDF buffer generated, size: ${pdfBuffer.length} bytes`);
 
-    // Upload PDF to Cloudinary
-    const uploadPromise = new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          resource_type: 'raw',
-          folder: 'invoices',
-          public_id: `invoice_${invoice.invoice_number}_${Date.now()}`,
-          format: 'pdf'
-        },
-        (error, result) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve(result);
-          }
-        }
-      );
-
-      uploadStream.end(pdfBuffer);
+    // Set response headers for PDF download
+    const fileName = `invoice_${invoice.invoice_number}_${invoice.customer_name.replace(/\s+/g, '_')}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Accept-Ranges', 'bytes');
+    
+    logger.info(`Sending PDF to client: ${fileName}`);
+    logger.info(`Response headers set:`, {
+      contentType: 'application/pdf',
+      contentLength: pdfBuffer.length,
+      fileName: fileName
     });
+    
+    // Send PDF buffer directly to client - use end() instead of send()
+    res.end(pdfBuffer, 'binary');
 
-    const uploadResult = await uploadPromise;
-
-    // Save PDF info to invoice
-    invoice.pdf = {
-      url: uploadResult.secure_url,
-      public_id: uploadResult.public_id
-    };
-
-    await invoice.save();
-
-    logger.info(`PDF generated and uploaded for invoice ${invoice.invoice_number}`);
-
-    res.json({
-      success: true,
-      message: 'PDF generated successfully',
-      data: {
-        pdf_url: uploadResult.secure_url,
-        invoice: invoice
-      }
-    });
+    logger.info(`✅ PDF generated and sent for download: ${fileName}`);
   } catch (error) {
-    logger.error('Generate PDF error:', error);
+    logger.error('❌ Generate PDF error:', error);
     res.status(500).json({
       success: false,
       message: 'Error generating PDF',

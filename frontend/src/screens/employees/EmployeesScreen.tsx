@@ -9,7 +9,9 @@ import {
   Alert,
   Modal,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, shadows } from '../../theme';
 import { useEmployeeStore } from '../../store/employeeStore';
@@ -30,6 +32,7 @@ export default function EmployeesScreen() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
   // Add Employee Form
   const [newEmployee, setNewEmployee] = useState({
@@ -48,9 +51,24 @@ export default function EmployeesScreen() {
   
   const [errors, setErrors] = useState<any>({});
 
+  // Initial load
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  // Refresh when screen comes into focus (fixes pending salary not updating)
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchEmployees(searchQuery);
+    }, [searchQuery])
+  );
+
+  // Pull to refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchEmployees(searchQuery);
+    setRefreshing(false);
+  };
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -245,6 +263,14 @@ export default function EmployeesScreen() {
         renderItem={renderEmployee}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={64} color={colors.textSecondary} />

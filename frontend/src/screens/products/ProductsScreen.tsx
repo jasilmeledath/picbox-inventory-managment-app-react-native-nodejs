@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, shadows } from '../../theme';
@@ -23,6 +24,7 @@ import { formatCurrency } from '../../utils/helpers';
 export default function ProductsScreen() {
   const { products, isLoading, fetchProducts, createProduct, deleteProduct } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newProduct, setNewProduct] = useState({
     sku: '',
@@ -36,6 +38,12 @@ export default function ProductsScreen() {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchProducts(searchQuery);
+    setRefreshing(false);
+  };
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -174,6 +182,14 @@ export default function ProductsScreen() {
         renderItem={renderProduct}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="cube-outline" size={64} color={colors.textSecondary} />

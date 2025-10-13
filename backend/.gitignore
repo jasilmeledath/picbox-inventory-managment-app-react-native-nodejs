@@ -37,3 +37,6 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Generated PDFs
+invoices/

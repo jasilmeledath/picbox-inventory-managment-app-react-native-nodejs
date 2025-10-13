@@ -9,7 +9,7 @@ const { uploadToCloudinary, deleteFromCloudinary } = require('../middleware/uplo
  */
 exports.createCompanyCredential = async (req, res) => {
   try {
-    const {
+    let {
       company_name,
       display_name,
       address,
@@ -19,6 +19,13 @@ exports.createCompanyCredential = async (req, res) => {
       tax_details,
       notes
     } = req.body;
+
+    // Parse JSON strings if they exist (from FormData)
+    if (typeof address === 'string') address = JSON.parse(address);
+    if (typeof contact === 'string') contact = JSON.parse(contact);
+    if (typeof bank_details === 'string') bank_details = JSON.parse(bank_details);
+    if (typeof upi_details === 'string') upi_details = JSON.parse(upi_details);
+    if (typeof tax_details === 'string') tax_details = JSON.parse(tax_details);
 
     // Check if company credential already exists
     const existing = await CompanyCredential.findOne({ company_name });
@@ -180,7 +187,7 @@ exports.updateCompanyCredential = async (req, res) => {
       });
     }
 
-    const {
+    let {
       display_name,
       address,
       contact,
@@ -190,6 +197,13 @@ exports.updateCompanyCredential = async (req, res) => {
       is_active,
       notes
     } = req.body;
+
+    // Parse JSON strings if they exist (from FormData)
+    if (typeof address === 'string') address = JSON.parse(address);
+    if (typeof contact === 'string') contact = JSON.parse(contact);
+    if (typeof bank_details === 'string') bank_details = JSON.parse(bank_details);
+    if (typeof upi_details === 'string') upi_details = JSON.parse(upi_details);
+    if (typeof tax_details === 'string') tax_details = JSON.parse(tax_details);
 
     // Update fields
     if (display_name !== undefined) companyCredential.display_name = display_name;

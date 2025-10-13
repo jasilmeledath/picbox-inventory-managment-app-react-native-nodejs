@@ -164,11 +164,16 @@ exports.getDashboardSummary = async (req, res) => {
     // SUMMARY RESPONSE
     // ============================================
     const summary = {
-      // Core Metrics
+      // Core Metrics (matching frontend interface)
       totalRevenue: revenueData.totalRevenue, // Total billed (final invoices)
       totalExpenses: totalExpenses, // Total paid out
       grossProfit: grossProfit, // Revenue - Expenses
       netProfit: netProfit, // What we received - What we paid
+      profit: netProfit, // Alias for frontend compatibility
+      
+      // Additional fields expected by frontend
+      totalWagesPending: totalWagesPending,
+      totalWagesPaid: totalWagesPaid,
       
       // Revenue Breakdown
       revenueBreakdown: {
@@ -178,13 +183,21 @@ exports.getDashboardSummary = async (req, res) => {
         potentialRevenue: potentialRevenue // Estimates (not confirmed)
       },
 
-      // Expense Breakdown
+      // Expense Breakdown (matching frontend 'breakdowns' structure)
       expenseBreakdown: {
         wagesPaid: totalWagesPaid,
         wagesPending: totalWagesPending,
         jobExpenses: totalJobExpenses,
         purchaseCosts: totalPurchaseCosts,
         totalActualExpenses: totalExpenses // Cash basis
+      },
+      
+      // Also provide as 'breakdowns' for frontend compatibility
+      breakdowns: {
+        wagesPending: totalWagesPending,
+        wagesPaid: totalWagesPaid,
+        jobExpenses: totalJobExpenses,
+        purchaseCosts: totalPurchaseCosts
       },
 
       // Cash Flow

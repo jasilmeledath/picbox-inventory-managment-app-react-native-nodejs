@@ -10,6 +10,7 @@ import {
   ScrollView,
   TextInput,
   SafeAreaView,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, shadows } from '../../theme';
@@ -29,6 +30,7 @@ export default function InvoicesScreen() {
   
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
@@ -46,6 +48,8 @@ export default function InvoicesScreen() {
     status: 'draft' as 'draft' | 'estimate' | 'final',
     date: null as Date | null,
     paid_amount: '',
+    discount_type: 'percentage' as 'percentage' | 'amount',
+    discount_value: '',
   });
 
   // Selected Items
@@ -74,6 +78,20 @@ export default function InvoicesScreen() {
       console.error('Failed to load invoices:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadInvoices(),
+        fetchProducts(),
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -161,39 +179,60 @@ export default function InvoicesScreen() {
     );
   };
 
-  const calculateTotal = () => {
+  const calculateSubtotal = () => {
     return selectedItems.reduce((sum, i) => sum + (i.qty * i.rate), 0);
   };
 
+  const calculateDiscount = () => {
+    const subtotal = calculateSubtotal();
+    const discountValue = parseFloat(invoiceForm.discount_value) || 0;
+    
+    if (invoiceForm.discount_type === 'percentage') {
+      return (subtotal * discountValue) / 100;
+    }
+    return discountValue;
+  };
+
+  const calculateTotal = () => {
+    const subtotal = calculateSubtotal();
+    const discount = calculateDiscount();
+    return subtotal - discount;
+  };
+
   const handleGeneratePDF = async (invoiceId: string) => {
+    if (!viewingInvoice) return;
+
     Alert.alert(
-      'Generate PDF',
-      'This will create a professional PDF invoice with company details and QR code. Continue?',
+      'Download Invoice PDF',
+      'Generate and download a professional PDF invoice with company details and QR code?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Generate',
+          text: 'Download',
           onPress: async () => {
             setIsGeneratingPDF(true);
             try {
-              const updatedInvoice = await invoiceService.generatePDF(invoiceId);
+              console.log('Starting PDF generation for invoice:', invoiceId);
               
-              if (updatedInvoice.pdf?.url) {
-                Alert.alert(
-                  'Success',
-                  'PDF generated successfully! You can now view or share the invoice.',
-                  [
-                    { text: 'OK', onPress: () => {
-                      setViewingInvoice(updatedInvoice);
-                      loadInvoices();
-                    }}
-                  ]
-                );
-              }
+              const fileUri = await invoiceService.generatePDF(
+                invoiceId,
+                viewingInvoice.invoice_number,
+                viewingInvoice.customer_name
+              );
+              
+              console.log('PDF generated successfully at:', fileUri);
+              
+              Alert.alert(
+                'Success',
+                'Invoice PDF generated and ready to share! The share dialog will open automatically.',
+                [{ text: 'OK' }]
+              );
             } catch (error: any) {
+              console.error('PDF Generation failed:', error);
               Alert.alert(
                 'Error',
-                error.message || 'Failed to generate PDF. Make sure company credentials are configured in Settings.'
+                error.message || 'Failed to generate PDF. Please check:\n\n1. Company credentials are configured\n2. You have internet connection\n3. Server is running',
+                [{ text: 'OK' }]
               );
             } finally {
               setIsGeneratingPDF(false);
@@ -230,6 +269,11 @@ export default function InvoicesScreen() {
       const formattedDate = invoiceForm.date.toISOString().split('T')[0];
       const totalAmount = calculateTotal();
 
+      // Calculate discount fields
+      const discountValue = parseFloat(invoiceForm.discount_value) || 0;
+      const discount_percentage = invoiceForm.discount_type === 'percentage' ? discountValue : 0;
+      const discount = invoiceForm.discount_type === 'amount' ? discountValue : 0;
+
       const invoiceData = {
         brand_type: invoiceForm.brand_type,
         customer_name: invoiceForm.customer_name,
@@ -244,6 +288,8 @@ export default function InvoicesScreen() {
         })),
         total_amount: totalAmount,
         paid_amount: parseFloat(invoiceForm.paid_amount) || 0,
+        discount_percentage,
+        discount,
       };
 
       await invoiceService.createInvoice(invoiceData);
@@ -278,6 +324,11 @@ export default function InvoicesScreen() {
       const formattedDate = invoiceForm.date.toISOString().split('T')[0];
       const totalAmount = calculateTotal();
 
+      // Calculate discount fields
+      const discountValue = parseFloat(invoiceForm.discount_value) || 0;
+      const discount_percentage = invoiceForm.discount_type === 'percentage' ? discountValue : 0;
+      const discount = invoiceForm.discount_type === 'amount' ? discountValue : 0;
+
       const updates = {
         brand_type: invoiceForm.brand_type,
         customer_name: invoiceForm.customer_name,
@@ -292,6 +343,8 @@ export default function InvoicesScreen() {
         })),
         total_amount: totalAmount,
         paid_amount: parseFloat(invoiceForm.paid_amount) || 0,
+        discount_percentage,
+        discount,
       };
 
       await invoiceService.updateInvoice(editingInvoice._id, updates);
@@ -312,6 +365,12 @@ export default function InvoicesScreen() {
   const handleEditInvoice = (invoice: Invoice) => {
     setEditingInvoice(invoice);
     
+    // Determine discount type and value
+    const discountType = invoice.discount_percentage > 0 ? 'percentage' : 'amount';
+    const discountValue = invoice.discount_percentage > 0 
+      ? invoice.discount_percentage.toString() 
+      : invoice.discount.toString();
+    
     setInvoiceForm({
       brand_type: invoice.brand_type,
       customer_name: invoice.customer_name,
@@ -319,6 +378,8 @@ export default function InvoicesScreen() {
       status: invoice.status,
       date: new Date(invoice.date),
       paid_amount: invoice.paid_amount.toString(),
+      discount_type: discountType,
+      discount_value: discountValue || '',
     });
 
     setSelectedItems(invoice.rented_items.map(i => ({
@@ -372,6 +433,8 @@ export default function InvoicesScreen() {
       status: 'draft',
       date: null,
       paid_amount: '',
+      discount_type: 'percentage',
+      discount_value: '',
     });
     setSelectedItems([]);
     setCurrentStep(1);
@@ -485,6 +548,14 @@ export default function InvoicesScreen() {
         renderItem={renderInvoice}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="document-text-outline" size={64} color={colors.textSecondary} />
@@ -630,6 +701,51 @@ export default function InvoicesScreen() {
                   onChangeText={(text) => setInvoiceForm({ ...invoiceForm, paid_amount: text })}
                   keyboardType="numeric"
                 />
+
+                {/* Discount Section */}
+                <View style={{ marginTop: 16 }}>
+                  <Text style={styles.inputLabel}>Discount</Text>
+                  
+                  {/* Discount Type Toggle */}
+                  <View style={styles.statusSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.statusOption,
+                        invoiceForm.discount_type === 'percentage' && styles.statusOptionActive
+                      ]}
+                      onPress={() => setInvoiceForm({ ...invoiceForm, discount_type: 'percentage' })}
+                    >
+                      <Text style={[
+                        styles.statusOptionText,
+                        invoiceForm.discount_type === 'percentage' && styles.statusOptionTextActive
+                      ]}>
+                        Percentage (%)
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.statusOption,
+                        invoiceForm.discount_type === 'amount' && styles.statusOptionActive
+                      ]}
+                      onPress={() => setInvoiceForm({ ...invoiceForm, discount_type: 'amount' })}
+                    >
+                      <Text style={[
+                        styles.statusOptionText,
+                        invoiceForm.discount_type === 'amount' && styles.statusOptionTextActive
+                      ]}>
+                        Amount (₹)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Input
+                    label={invoiceForm.discount_type === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
+                    placeholder={invoiceForm.discount_type === 'percentage' ? '0' : '0.00'}
+                    value={invoiceForm.discount_value}
+                    onChangeText={(text) => setInvoiceForm({ ...invoiceForm, discount_value: text })}
+                    keyboardType="numeric"
+                  />
+                </View>
               </View>
             )}
 
@@ -747,6 +863,22 @@ export default function InvoicesScreen() {
                   ))}
 
                   <View style={styles.summaryTotal}>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Subtotal:</Text>
+                      <Text style={styles.summaryValue}>{formatCurrency(calculateSubtotal())}</Text>
+                    </View>
+                    
+                    {calculateDiscount() > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: colors.success }]}>
+                          Discount {invoiceForm.discount_type === 'percentage' ? `(${invoiceForm.discount_value}%)` : ''}:
+                        </Text>
+                        <Text style={[styles.summaryValue, { color: colors.success }]}>
+                          - {formatCurrency(calculateDiscount())}
+                        </Text>
+                      </View>
+                    )}
+                    
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryTotalLabel}>Total Amount:</Text>
                       <Text style={styles.summaryTotalValue}>{formatCurrency(calculateTotal())}</Text>
@@ -867,6 +999,19 @@ export default function InvoicesScreen() {
                       <Text style={styles.statusText}>{viewingInvoice.status.toUpperCase()}</Text>
                     </View>
                   </View>
+
+                  {/* Discount Information */}
+                  {(viewingInvoice.discount > 0 || viewingInvoice.discount_percentage > 0) && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Discount:</Text>
+                      <Text style={styles.detailValue}>
+                        {viewingInvoice.discount_percentage > 0 
+                          ? `${viewingInvoice.discount_percentage}% (${formatCurrency(viewingInvoice.subtotal * viewingInvoice.discount_percentage / 100)})`
+                          : formatCurrency(viewingInvoice.discount)
+                        }
+                      </Text>
+                    </View>
+                  )}
                 </Card>
 
                 <Card style={styles.detailSection}>
@@ -884,6 +1029,27 @@ export default function InvoicesScreen() {
                     </View>
                   ))}
 
+                  <View style={styles.subtotalRow}>
+                    <Text style={styles.subtotalLabel}>Subtotal:</Text>
+                    <Text style={styles.subtotalValue}>{formatCurrency(viewingInvoice.subtotal || viewingInvoice.total_amount)}</Text>
+                  </View>
+                  
+                  {/* Show discount if applicable */}
+                  {(viewingInvoice.discount > 0 || viewingInvoice.discount_percentage > 0) && (
+                    <View style={styles.subtotalRow}>
+                      <Text style={[styles.subtotalLabel, { color: colors.success }]}>
+                        Discount {viewingInvoice.discount_percentage > 0 ? `(${viewingInvoice.discount_percentage}%)` : ''}:
+                      </Text>
+                      <Text style={[styles.subtotalValue, { color: colors.success }]}>
+                        - {formatCurrency(
+                          viewingInvoice.discount_percentage > 0 
+                            ? (viewingInvoice.subtotal || viewingInvoice.total_amount) * viewingInvoice.discount_percentage / 100
+                            : viewingInvoice.discount
+                        )}
+                      </Text>
+                    </View>
+                  )}
+                  
                   <View style={styles.subtotalRow}>
                     <Text style={styles.subtotalLabel}>Total:</Text>
                     <Text style={styles.subtotalValue}>{formatCurrency(viewingInvoice.total_amount)}</Text>
@@ -909,48 +1075,20 @@ export default function InvoicesScreen() {
                   )}
                 </Card>
 
-                {/* PDF Actions */}
+                {/* PDF Export */}
                 <Card style={styles.detailSection}>
-                  <Text style={styles.sectionTitle}>PDF Export</Text>
+                  <Text style={styles.sectionTitle}>📄 Download Invoice PDF</Text>
                   
-                  {viewingInvoice.pdf?.url ? (
-                    <View>
-                      <View style={styles.pdfSuccessRow}>
-                        <Ionicons name="checkmark-circle" size={24} color={colors.success} />
-                        <Text style={styles.pdfSuccessText}>PDF Generated</Text>
-                      </View>
-                      <Button
-                        title="View PDF"
-                        onPress={() => {
-                          if (viewingInvoice.pdf?.url) {
-                            Alert.alert(
-                              'PDF URL',
-                              viewingInvoice.pdf.url,
-                              [
-                                { text: 'Copy URL', onPress: () => {
-                                  // In production, use Clipboard.setString()
-                                  Alert.alert('Info', 'PDF URL: ' + viewingInvoice.pdf.url);
-                                }},
-                                { text: 'Close' }
-                              ]
-                            );
-                          }
-                        }}
-                        variant="secondary"
-                      />
-                    </View>
-                  ) : (
-                    <View>
-                      <Text style={styles.pdfInfoText}>
-                        Generate a professional PDF invoice with company logo, QR code, and payment details.
-                      </Text>
-                      <Button
-                        title={isGeneratingPDF ? "Generating PDF..." : "Export as PDF"}
-                        onPress={() => handleGeneratePDF(viewingInvoice._id)}
-                        loading={isGeneratingPDF}
-                      />
-                    </View>
-                  )}
+                  <Text style={styles.pdfInfoText}>
+                    Generate and download a professional PDF invoice with company logo, bank details, and UPI QR code for easy payment.
+                  </Text>
+                  
+                  <Button
+                    title={isGeneratingPDF ? "Generating PDF..." : "Download Invoice PDF"}
+                    onPress={() => handleGeneratePDF(viewingInvoice._id)}
+                    loading={isGeneratingPDF}
+                    icon={<Ionicons name="download-outline" size={20} color={colors.white} />}
+                  />
                 </Card>
               </>
             )}

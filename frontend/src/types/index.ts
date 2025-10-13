@@ -90,6 +90,9 @@ export interface Invoice {
   customer_name: string;
   event_name?: string;
   rented_items: RentedItem[];
+  subtotal: number;
+  discount: number;
+  discount_percentage: number;
   total_amount: number;
   paid_amount: number;
   pending_amount: number;

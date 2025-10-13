@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/database');
 const logger = require('./config/logger');
 const swaggerUi = require('swagger-ui-express');
@@ -22,12 +23,15 @@ app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://your-frontend-domain.com'] 
-    : ['http://localhost:3000', 'http://localhost:19006'],
+    : true, // Allow all origins in development for mobile testing
   credentials: true
 }));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files for locally stored PDFs
+app.use('/invoices', express.static(path.join(__dirname, '../invoices')));
 
 // Request logging
 app.use((req, res, next) => {
@@ -61,6 +65,7 @@ app.use('/api/credentials', require('./routes/credential.routes'));
 app.use('/api/company-credentials', require('./routes/companyCredential.routes'));
 app.use('/api/uploads', require('./routes/upload.routes'));
 app.use('/api/dashboard', require('./routes/dashboard.routes'));
+app.use('/api/backup', require('./routes/backup.routes'));
 
 // 404 handler
 app.use((req, res) => {
@@ -87,9 +92,11 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 8080;
-const server = app.listen(PORT, () => {
+const HOST = '0.0.0.0'; // Listen on all network interfaces for mobile device access
+const server = app.listen(PORT, HOST, () => {
   logger.info(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
-  logger.info(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+  logger.info(`� Local access: http://localhost:${PORT}/api-docs`);
+  logger.info(`📱 Network access: http://192.168.220.35:${PORT}/api-docs`);
 });
 
 // Graceful shutdown

@@ -60,9 +60,6 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     customer_name,
     event_name,
     rented_items,
-    subtotal,
-    discount,
-    discount_percentage,
     total_amount,
     paid_amount,
     pending_amount,
@@ -70,9 +67,10 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     date
   } = invoice;
 
-  // Calculate subtotal if not provided (for backward compatibility)
-  const calculatedSubtotal = subtotal || rented_items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
-  const discountAmount = discount || 0;
+  // Calculate subtotal and tax if applicable
+  const subtotal = total_amount;
+  const gstRate = 18; // 18% GST
+  const gstAmount = 0; // Not calculating GST separately for now
   
   // Determine logo path based on brand
   const logoPath = path.join(__dirname, '../../assets/logos', 
@@ -88,9 +86,9 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     console.error('Error reading logo:', error);
   }
   
-  // Generate UPI QR Code only for FINAL invoices (not estimates) and if UPI details exist
+  // Generate UPI QR Code only for estimates and if UPI details exist
   let qrCodeDataURL = null;
-  if (status === 'final' && companyCredential.upi_details?.upi_id && pending_amount > 0) {
+  if (status === 'estimate' && companyCredential.upi_details?.upi_id && pending_amount > 0) {
     qrCodeDataURL = await generateUPIQRCode(
       companyCredential.upi_details.upi_id,
       companyCredential.upi_details.payee_name || companyCredential.display_name,
@@ -149,17 +147,16 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     .container {
       max-width: 800px;
       margin: 0 auto;
-      padding: 30px;
+      padding: 40px;
     }
     
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 25px;
-      padding-bottom: 15px;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
       border-bottom: 3px solid ${brandColor};
-      page-break-after: avoid;
     }
     
     .company-info {
@@ -167,22 +164,22 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     }
     
     .company-logo {
-      max-width: 180px;
+      max-width: 200px;
       height: auto;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
     }
     
     .company-name {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: bold;
       color: ${brandColor};
-      margin-bottom: 5px;
+      margin-bottom: 8px;
     }
     
     .company-address {
-      font-size: 11px;
+      font-size: 12px;
       color: #6b7280;
-      line-height: 1.6;
+      line-height: 1.8;
     }
     
     .invoice-info {
@@ -190,10 +187,10 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     }
     
     .invoice-title {
-      font-size: 28px;
+      font-size: 32px;
       font-weight: bold;
       color: ${brandColor};
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     
     .status-badge {
@@ -228,38 +225,35 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     }
     
     .section {
-      margin-bottom: 20px;
+      margin-bottom: 30px;
     }
     
     .section-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       color: #1f2937;
       background: #f3f4f6;
-      padding: 8px 12px;
-      margin-bottom: 12px;
+      padding: 10px 15px;
+      margin-bottom: 15px;
       border-left: 4px solid ${brandColor};
     }
     
     .bill-to {
       background: #f9fafb;
-      padding: 15px;
+      padding: 20px;
       border-radius: 8px;
       border: 1px solid #e5e7eb;
-      margin-bottom: 20px;
-      page-break-inside: avoid;
-      page-break-after: avoid;
     }
     
     .customer-name {
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 700;
       color: #1f2937;
-      margin-bottom: 3px;
+      margin-bottom: 5px;
     }
     
     .event-name {
-      font-size: 13px;
+      font-size: 14px;
       color: #6b7280;
     }
     
@@ -267,18 +261,6 @@ async function generateInvoiceHTML(invoice, companyCredential) {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
-      page-break-inside: auto;
-    }
-    
-    tbody tr {
-      page-break-inside: avoid;
-      page-break-after: auto;
-    }
-    
-    tbody td {
-      padding: 10px 12px;
-      border-bottom: 1px solid #e5e7eb;
-      font-size: 13px;
     }
     
     thead {
@@ -287,10 +269,10 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     }
     
     thead th {
-      padding: 10px 12px;
+      padding: 12px;
       text-align: left;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 13px;
     }
     
     tbody tr:hover {
@@ -298,45 +280,42 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     }
     
     .summary-table {
-      margin-top: 20px;
+      margin-top: 30px;
       float: right;
-      width: 320px;
+      width: 350px;
     }
     
     .summary-row {
       display: flex;
       justify-content: space-between;
-      padding: 8px 12px;
+      padding: 10px 15px;
       border-bottom: 1px solid #e5e7eb;
-      font-size: 13px;
     }
     
     .summary-row.total {
       background: ${brandColor};
       color: white;
-      font-size: 16px;
+      font-size: 18px;
       font-weight: bold;
       border: none;
-      margin-top: 8px;
+      margin-top: 10px;
     }
     
     .summary-row.paid {
       background: #d1fae5;
       color: #065f46;
       font-weight: 600;
-      font-size: 13px;
     }
     
     .summary-row.pending {
       background: #fee2e2;
       color: #991b1b;
       font-weight: 600;
-      font-size: 13px;
     }
     
     .payment-section {
       clear: both;
-      margin-top: 30px;
+      margin-top: 50px;
       display: flex;
       justify-content: space-between;
       gap: 20px;
@@ -345,66 +324,66 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     .payment-info {
       flex: 1;
       background: #f9fafb;
-      padding: 15px;
+      padding: 20px;
       border-radius: 8px;
       border: 1px solid #e5e7eb;
     }
     
     .payment-info h3 {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       color: ${brandColor};
-      margin-bottom: 12px;
+      margin-bottom: 15px;
     }
     
     .payment-detail {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 6px;
-      font-size: 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
     }
     
     .qr-section {
-      width: 180px;
+      width: 200px;
       text-align: center;
       background: #f9fafb;
-      padding: 15px;
+      padding: 20px;
       border-radius: 8px;
       border: 2px dashed ${brandColor};
     }
     
     .qr-code {
-      width: 150px;
-      height: 150px;
-      margin: 8px auto;
+      width: 160px;
+      height: 160px;
+      margin: 10px auto;
     }
     
     .qr-label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       color: ${brandColor};
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     
     .qr-amount {
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 700;
       color: #1f2937;
-      margin-top: 8px;
+      margin-top: 10px;
     }
     
     .footer {
-      margin-top: 30px;
-      padding-top: 15px;
+      margin-top: 50px;
+      padding-top: 20px;
       border-top: 2px solid #e5e7eb;
       text-align: center;
-      font-size: 11px;
+      font-size: 12px;
       color: #6b7280;
     }
     
     .contact-info {
-      margin-bottom: 12px;
-      line-height: 1.8;
+      margin-bottom: 15px;
+      line-height: 2;
     }
     
     .contact-info strong {
@@ -412,60 +391,25 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     }
     
     .thank-you {
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 600;
       color: ${brandColor};
       font-style: italic;
-      margin-top: 15px;
+      margin-top: 20px;
     }
     
     .notes {
-      clear: both;
       background: #fffbeb;
-      padding: 12px;
+      padding: 15px;
       border-left: 4px solid #f59e0b;
-      margin-top: 20px;
-      font-size: 11px;
+      margin-top: 30px;
+      font-size: 12px;
       color: #78350f;
     }
     
     @media print {
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      
       .container {
         padding: 20px;
-      }
-      
-      .header {
-        page-break-after: avoid;
-      }
-      
-      .bill-to {
-        page-break-inside: avoid;
-        page-break-after: avoid;
-      }
-      
-      thead {
-        display: table-header-group;
-      }
-      
-      tbody {
-        display: table-row-group;
-      }
-      
-      .summary-table {
-        page-break-inside: avoid;
-      }
-      
-      .payment-section {
-        page-break-inside: avoid;
-      }
-      
-      .footer {
-        page-break-inside: avoid;
       }
     }
   </style>
@@ -475,7 +419,7 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     <!-- Header -->
     <div class="header">
       <div class="company-info">
-        ${logoBase64 ? `<img src="${logoBase64}" alt="${companyCredential.display_name}" class="company-logo">` : `<div class="company-name">${companyCredential.display_name}</div>`}
+        ${companyCredential.logo?.url ? `<img src="${companyCredential.logo.url}" alt="${companyCredential.display_name}" class="company-logo">` : `<div class="company-name">${companyCredential.display_name}</div>`}
         <div class="company-address">
           ${companyCredential.address.line1}<br>
           ${companyCredential.address.line2 ? companyCredential.address.line2 + '<br>' : ''}
@@ -485,10 +429,11 @@ async function generateInvoiceHTML(invoice, companyCredential) {
       </div>
       
       <div class="invoice-info">
-        <div class="invoice-title">${documentTitle}</div>
+        <div class="invoice-title">INVOICE</div>
+        <div class="status-badge">${status.toUpperCase()}</div>
         <div class="invoice-details">
           <div class="invoice-detail-row">
-            <span class="label">${documentTitle} #:</span>
+            <span class="label">Invoice #:</span>
             <span class="value">${invoice_number}</span>
           </div>
           <div class="invoice-detail-row">
@@ -531,25 +476,25 @@ async function generateInvoiceHTML(invoice, companyCredential) {
     <div class="summary-table">
       <div class="summary-row">
         <span>Subtotal:</span>
-        <span>${formatCurrency(calculatedSubtotal)}</span>
+        <span>${formatCurrency(subtotal)}</span>
       </div>
-      ${discountAmount > 0 ? `
-      <div class="summary-row" style="color: #059669;">
-        <span>Discount${discount_percentage ? ` (${discount_percentage}%)` : ''}:</span>
-        <span>- ${formatCurrency(discountAmount)}</span>
+      ${gstAmount > 0 ? `
+      <div class="summary-row">
+        <span>GST (${gstRate}%):</span>
+        <span>${formatCurrency(gstAmount)}</span>
       </div>
       ` : ''}
       <div class="summary-row total">
         <span>TOTAL:</span>
         <span>${formatCurrency(total_amount)}</span>
       </div>
-      ${status === 'final' && paid_amount > 0 ? `
+      ${paid_amount > 0 ? `
       <div class="summary-row paid">
         <span>Paid:</span>
         <span>${formatCurrency(paid_amount)}</span>
       </div>
       ` : ''}
-      ${status === 'final' && pending_amount > 0 ? `
+      ${pending_amount > 0 ? `
       <div class="summary-row pending">
         <span>Balance Due:</span>
         <span>${formatCurrency(pending_amount)}</span>
@@ -557,8 +502,7 @@ async function generateInvoiceHTML(invoice, companyCredential) {
       ` : ''}
     </div>
     
-    <!-- Payment Details (Only for FINAL Invoice) -->
-    ${status === 'final' ? `
+    <!-- Payment Details -->
     <div class="payment-section">
       <div class="payment-info">
         <h3>💳 Bank Details</h3>
@@ -616,17 +560,10 @@ async function generateInvoiceHTML(invoice, companyCredential) {
       </div>
       ` : ''}
     </div>
-    ` : ''}
     
     ${status === 'estimate' ? `
     <div class="notes">
-      <strong>Note:</strong> This is an estimate/quotation. Final invoice with payment details will be sent after price confirmation.
-    </div>
-    ` : ''}
-    
-    ${status === 'final' && pending_amount > 0 ? `
-    <div class="notes" style="background: #dbeafe; border-left-color: #3b82f6;">
-      <strong>Payment Instructions:</strong> Please include invoice #${invoice_number} in your payment reference. Scan the QR code above for quick UPI payment.
+      <strong>Note:</strong> This is an estimate/quotation. Please include the invoice number (#${invoice_number}) in your payment communication.
     </div>
     ` : ''}
     
@@ -674,13 +611,11 @@ async function generateInvoicePDF(invoice, companyCredential) {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      preferCSSPageSize: false,
-      displayHeaderFooter: false,
       margin: {
-        top: '15mm',
-        right: '15mm',
-        bottom: '15mm',
-        left: '15mm'
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px'
       }
     });
     

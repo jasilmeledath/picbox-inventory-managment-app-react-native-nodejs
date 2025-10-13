@@ -26,11 +26,16 @@ router.post(
 );
 
 router.get('/', invoiceController.getInvoices);
+
+// Specific routes must come BEFORE generic :id routes
+// Support both GET and POST for PDF generation (GET for direct download, POST for API calls)
+router.get('/:id/generate-pdf', invoiceController.generatePDF);
+router.post('/:id/generate-pdf', invoiceController.generatePDF);
+router.post('/:id/upload', uploadPdf.single('pdf'), invoiceController.uploadPdf);
+
+// Generic :id routes come last
 router.get('/:id', invoiceController.getInvoice);
 router.patch('/:id', invoiceController.updateInvoice);
 router.delete('/:id', invoiceController.deleteInvoice);
-
-router.post('/:id/generate-pdf', invoiceController.generatePDF);
-router.post('/:id/upload', uploadPdf.single('pdf'), invoiceController.uploadPdf);
 
 module.exports = router;

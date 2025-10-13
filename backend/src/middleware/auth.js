@@ -7,17 +7,32 @@ const logger = require('../config/logger');
  */
 const authenticate = async (req, res, next) => {
   try {
-    // Get token from header
-    const authHeader = req.headers.authorization;
+    logger.info(`=== Auth Middleware ===`);
+    logger.info(`Path: ${req.path}`);
+    logger.info(`Method: ${req.method}`);
+    logger.info(`Authorization header: ${req.headers.authorization ? 'Present' : 'Missing'}`);
+    logger.info(`Query token: ${req.query.token ? 'Present' : 'Missing'}`);
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    let token;
+    
+    // Check for token in query parameter first (for FileSystem downloads)
+    if (req.query.token) {
+      token = req.query.token;
+      logger.info('Using token from query parameter');
+    }
+    // Then check Authorization header
+    else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.substring(7);
+      logger.info('Using token from Authorization header');
+    }
+    
+    if (!token) {
+      logger.error(`Auth failed: No token provided`);
       return res.status(401).json({
         success: false,
         message: 'No token provided. Authorization denied.'
       });
     }
-
-    const token = authHeader.substring(7);
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);

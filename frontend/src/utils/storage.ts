@@ -13,10 +13,10 @@ export const storage = {
     try {
       const url = await AsyncStorage.getItem(KEYS.API_BASE_URL);
       // Using your Mac's IP address for physical device testing
-      return url || 'http://192.168.0.111:3000/api';
+      return url || 'http://192.168.0.102:3000/api';
     } catch (error) {
       console.error('Error getting API base URL:', error);
-      return 'http://192.168.0.111:3000/api';
+      return 'http://192.168.0.102:3000/api';
     }
   },
 

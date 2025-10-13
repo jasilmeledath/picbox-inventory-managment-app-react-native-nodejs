@@ -104,9 +104,22 @@ export default function CompanyCredentialsScreen() {
           alternate_phone: '',
           email: '',
         },
-        bank_details: {},
-        upi_details: {},
-        tax_details: {},
+        bank_details: {
+          account_name: '',
+          account_number: '',
+          ifsc_code: '',
+          bank_name: '',
+          branch: '',
+        },
+        upi_details: {
+          upi_id: '',
+          google_pay_number: '',
+          payee_name: '',
+        },
+        tax_details: {
+          gstin: '',
+          pan: '',
+        },
         notes: '',
       });
     }
@@ -116,8 +129,33 @@ export default function CompanyCredentialsScreen() {
 
   const handleSave = async () => {
     try {
-      if (!formData.display_name || !formData.address.line1 || !formData.contact.primary_phone) {
-        Alert.alert('Error', 'Please fill in all required fields (Display Name, Address Line 1, Primary Phone)');
+      // Validate required fields
+      const errors: string[] = [];
+      
+      if (!formData.display_name?.trim()) {
+        errors.push('Display Name');
+      }
+      if (!formData.address?.line1?.trim()) {
+        errors.push('Address Line 1');
+      }
+      if (!formData.address?.city?.trim()) {
+        errors.push('City');
+      }
+      if (!formData.address?.state?.trim()) {
+        errors.push('State');
+      }
+      if (!formData.address?.pincode?.trim()) {
+        errors.push('Pincode');
+      }
+      if (!formData.contact?.primary_phone?.trim()) {
+        errors.push('Primary Phone');
+      }
+
+      if (errors.length > 0) {
+        Alert.alert(
+          'Validation Error',
+          `Please fill in the following required fields:\n\n${errors.join('\n')}`
+        );
         return;
       }
 

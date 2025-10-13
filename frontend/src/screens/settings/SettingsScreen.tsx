@@ -8,15 +8,20 @@ import {
   Alert,
   TextInput,
   Modal,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { colors, typography, spacing, shadows } from '../../theme';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { useAuthStore } from '../../store/authStore';
 import { storage } from '../../utils/storage';
 import { SettingsStackParamList } from '../../navigation/SettingsNavigator';
+import backupService, { BackupInfo } from '../../api/backupService';
 
 type Props = NativeStackScreenProps<SettingsStackParamList, 'SettingsHome'>;
 
@@ -25,15 +30,27 @@ export default function SettingsScreen({ navigation }: Props) {
   const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [tempUrl, setTempUrl] = useState('');
+  const [backupInfo, setBackupInfo] = useState<BackupInfo | null>(null);
+  const [isDownloadingBackup, setIsDownloadingBackup] = useState(false);
 
   useEffect(() => {
     loadApiUrl();
+    loadBackupInfo();
   }, []);
 
   const loadApiUrl = async () => {
     const url = await storage.getApiBaseUrl();
     setApiBaseUrl(url);
     setTempUrl(url);
+  };
+
+  const loadBackupInfo = async () => {
+    try {
+      const info = await backupService.getBackupInfo();
+      setBackupInfo(info);
+    } catch (error) {
+      console.error('Failed to load backup info:', error);
+    }
   };
 
   const handleSaveUrl = async () => {
@@ -87,6 +104,63 @@ export default function SettingsScreen({ navigation }: Props) {
             setApiBaseUrl(defaultUrl);
             setTempUrl(defaultUrl);
             Alert.alert('Success', 'API URL reset to default');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDownloadBackup = async () => {
+    Alert.alert(
+      'Download Backup',
+      'This will download all your data as a JSON file. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Download',
+          onPress: async () => {
+            setIsDownloadingBackup(true);
+            try {
+              const backupData = await backupService.downloadBackup();
+              
+              const filename = `picbox_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+              const jsonString = JSON.stringify(backupData, null, 2);
+              
+              // Use the new expo-file-system API
+              const file = new File(Paths.cache, filename);
+              file.write(jsonString, { encoding: 'utf8' });
+
+              // Share the file
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(file.uri, {
+                  mimeType: 'application/json',
+                  dialogTitle: 'Save backup file',
+                  UTI: 'public.json',
+                });
+
+                // Calculate total records
+                const recordCounts = backupData.metadata.record_counts;
+                const totalRecords = recordCounts.users + recordCounts.employees + 
+                  recordCounts.products + recordCounts.jobs + recordCounts.invoices + 
+                  recordCounts.payments + recordCounts.companyCredentials + recordCounts.counters;
+
+                Alert.alert(
+                  'Success',
+                  `Backup downloaded successfully!\n\nTotal Records: ${totalRecords}\nCollections: ${backupData.metadata.total_collections}`,
+                  [{ text: 'OK' }]
+                );
+              } else {
+                throw new Error('Sharing is not available on this device');
+              }
+            } catch (error: any) {
+              console.error('Backup download error:', error);
+              Alert.alert('Error', error.message || 'Failed to download backup');
+            } finally {
+              setIsDownloadingBackup(false);
+            }
           },
         },
       ]
@@ -162,6 +236,60 @@ export default function SettingsScreen({ navigation }: Props) {
 
           <Text style={styles.helperText}>
             Configure company details, bank info, and UPI details for invoice generation
+          </Text>
+        </Card>
+
+        {/* Database Backup */}
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="cloud-download-outline" size={24} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Database Backup</Text>
+          </View>
+
+          {backupInfo && (
+            <>
+              <View style={styles.backupInfoContainer}>
+                <View style={styles.backupStat}>
+                  <Text style={styles.backupStatLabel}>Total Records</Text>
+                  <Text style={styles.backupStatValue}>{backupInfo.total_records}</Text>
+                </View>
+                <View style={styles.backupStatDivider} />
+                <View style={styles.backupStat}>
+                  <Text style={styles.backupStatLabel}>Collections</Text>
+                  <Text style={styles.backupStatValue}>{backupInfo.total_collections}</Text>
+                </View>
+              </View>
+
+              <View style={styles.backupDetails}>
+                <View style={styles.backupDetailRow}>
+                  <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.backupDetailText}>Employees: {backupInfo.collections.employees}</Text>
+                </View>
+                <View style={styles.backupDetailRow}>
+                  <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.backupDetailText}>Products: {backupInfo.collections.products}</Text>
+                </View>
+                <View style={styles.backupDetailRow}>
+                  <Ionicons name="briefcase-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.backupDetailText}>Jobs: {backupInfo.collections.jobs}</Text>
+                </View>
+                <View style={styles.backupDetailRow}>
+                  <Ionicons name="document-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.backupDetailText}>Invoices: {backupInfo.collections.invoices}</Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          <Button
+            title={isDownloadingBackup ? "Downloading..." : "Download Backup (JSON)"}
+            onPress={handleDownloadBackup}
+            disabled={isDownloadingBackup}
+            style={styles.backupButton}
+          />
+
+          <Text style={styles.helperText}>
+            Download a complete backup of all database records in JSON format. Use this for data safety and migration.
           </Text>
         </Card>
 
@@ -428,6 +556,48 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.sm,
     lineHeight: 18,
+  },
+  backupInfoContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  backupStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  backupStatLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  backupStatValue: {
+    ...typography.h3,
+    color: colors.primary,
+    fontWeight: 'bold',
+  },
+  backupStatDivider: {
+    width: 1,
+    backgroundColor: colors.divider,
+    marginHorizontal: spacing.md,
+  },
+  backupDetails: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  backupDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  backupDetailText: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  backupButton: {
+    marginBottom: spacing.xs,
   },
   developerInfo: {
     gap: spacing.md,

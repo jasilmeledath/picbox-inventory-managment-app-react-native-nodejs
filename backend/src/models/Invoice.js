@@ -40,6 +40,22 @@ const invoiceSchema = new mongoose.Schema({
       min: [0, 'Rate cannot be negative']
     }
   }],
+  subtotal: {
+    type: Number,
+    required: [true, 'Subtotal is required'],
+    min: [0, 'Subtotal cannot be negative']
+  },
+  discount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Discount cannot be negative']
+  },
+  discount_percentage: {
+    type: Number,
+    default: 0,
+    min: [0, 'Discount percentage cannot be negative'],
+    max: [100, 'Discount percentage cannot exceed 100']
+  },
   total_amount: {
     type: Number,
     required: [true, 'Total amount is required'],
