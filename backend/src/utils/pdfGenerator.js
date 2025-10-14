@@ -657,10 +657,19 @@ async function generateInvoicePDF(invoice, companyCredential) {
     // Generate HTML
     const html = await generateInvoiceHTML(invoice, companyCredential);
     
-    // Launch browser
+    // Launch browser with production-ready settings
     browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ]
     });
     
     const page = await browser.newPage();
