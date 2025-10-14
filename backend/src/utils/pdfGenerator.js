@@ -658,7 +658,8 @@ async function generateInvoicePDF(invoice, companyCredential) {
     const html = await generateInvoiceHTML(invoice, companyCredential);
     
     // Launch browser with production-ready settings
-    browser = await puppeteer.launch({
+    // Explicitly set executable path for Render.com deployment
+    const puppeteerConfig = {
       headless: 'new',
       args: [
         '--no-sandbox',
@@ -670,7 +671,19 @@ async function generateInvoicePDF(invoice, companyCredential) {
         '--single-process',
         '--disable-gpu'
       ]
-    });
+    };
+
+    // Set explicit executable path from Puppeteer's cache
+    if (process.env.NODE_ENV === 'production') {
+      const path = require('path');
+      const chromePath = path.join(
+        process.env.HOME || '/opt/render',
+        '.cache/puppeteer/chrome/linux-141.0.7390.76/chrome-linux64/chrome'
+      );
+      puppeteerConfig.executablePath = chromePath;
+    }
+
+    browser = await puppeteer.launch(puppeteerConfig);
     
     const page = await browser.newPage();
     
