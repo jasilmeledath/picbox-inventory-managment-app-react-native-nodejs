@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const dotenv = require('dotenv');
 const path = require('path');
+const { execSync } = require('child_process');
+const fs = require('fs');
 const connectDB = require('./config/database');
 const logger = require('./config/logger');
 const swaggerUi = require('swagger-ui-express');
@@ -11,6 +13,34 @@ const swaggerSpec = require('./config/swagger');
 
 // Load environment variables
 dotenv.config();
+
+// Install Chrome for Puppeteer on Render if not already installed
+const installChromeOnRender = () => {
+  if (process.env.RENDER || process.env.HOME === '/opt/render') {
+    const chromePath = path.join(
+      process.env.HOME || '/opt/render',
+      '.cache/puppeteer/chrome/linux-141.0.7390.76/chrome-linux64/chrome'
+    );
+    
+    if (!fs.existsSync(chromePath)) {
+      logger.info('🌐 Chrome not found, installing for Puppeteer...');
+      try {
+        execSync('npx puppeteer browsers install chrome', { 
+          stdio: 'inherit',
+          timeout: 300000 // 5 minute timeout
+        });
+        logger.info('✅ Chrome installed successfully');
+      } catch (error) {
+        logger.error('❌ Failed to install Chrome:', error);
+      }
+    } else {
+      logger.info('✅ Chrome already installed at runtime');
+    }
+  }
+};
+
+// Install Chrome before starting server
+installChromeOnRender();
 
 // Initialize Express app
 const app = express();
