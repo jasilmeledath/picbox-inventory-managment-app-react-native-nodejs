@@ -659,6 +659,7 @@ async function generateInvoicePDF(invoice, companyCredential) {
     
     // Launch browser with production-ready settings
     // Explicitly set executable path for Render.com deployment
+    const path = require('path');
     const puppeteerConfig = {
       headless: 'new',
       args: [
@@ -673,13 +674,14 @@ async function generateInvoicePDF(invoice, companyCredential) {
       ]
     };
 
-    // Set explicit executable path from Puppeteer's cache
-    if (process.env.NODE_ENV === 'production') {
-      const path = require('path');
+    // Set explicit executable path from Puppeteer's cache for Render.com
+    // Check if running on Render (RENDER environment variable exists)
+    if (process.env.RENDER || process.env.HOME === '/opt/render') {
       const chromePath = path.join(
         process.env.HOME || '/opt/render',
         '.cache/puppeteer/chrome/linux-141.0.7390.76/chrome-linux64/chrome'
       );
+      console.log(`🔍 Setting Chrome path for Render: ${chromePath}`);
       puppeteerConfig.executablePath = chromePath;
     }
 
