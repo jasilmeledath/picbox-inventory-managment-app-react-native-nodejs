@@ -689,10 +689,19 @@ async function generateInvoicePDF(invoice, companyCredential) {
     
     const page = await browser.newPage();
     
-    // Set content
+    // Set longer timeout for slow servers (Render free tier)
+    page.setDefaultNavigationTimeout(60000); // 60 seconds
+    page.setDefaultTimeout(60000); // 60 seconds
+    
+    // Set content with faster wait condition
+    // Use 'domcontentloaded' instead of 'networkidle0' for better performance
     await page.setContent(html, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'domcontentloaded', // Faster than networkidle0
+      timeout: 60000 // 60 seconds explicit timeout
     });
+    
+    // Wait a bit for any images to load
+    await page.waitForTimeout(1000); // 1 second buffer
     
     // Generate PDF
     const pdfBuffer = await page.pdf({

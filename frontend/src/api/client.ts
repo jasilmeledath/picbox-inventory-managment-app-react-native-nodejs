@@ -22,7 +22,7 @@ export const initializeApiClient = async (): Promise<AxiosInstance> => {
 
   apiClient = axios.create({
     baseURL,
-    timeout: 30000,
+    timeout: 90000, // 90 seconds - increased for PDF generation
     headers: {
       'Content-Type': 'application/json',
     },
