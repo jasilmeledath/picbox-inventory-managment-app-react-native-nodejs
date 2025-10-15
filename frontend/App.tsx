@@ -1,10 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import RootNavigator from './src/navigation/RootNavigator';
 import { initializeApiClient } from './src/api/client';
-import { colors } from './src/theme';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -23,18 +26,23 @@ export default function App() {
     initialize();
   }, []);
 
+  const onLayoutRootView = useCallback(async () => {
+    if (isInitialized) {
+      // Hide the splash screen after app is initialized
+      await SplashScreen.hideAsync();
+    }
+  }, [isInitialized]);
+
   if (!isInitialized) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return null; // Splash screen will remain visible
   }
 
   return (
     <SafeAreaProvider>
-      <RootNavigator />
-      <StatusBar style="auto" />
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <RootNavigator />
+        <StatusBar style="auto" />
+      </View>
     </SafeAreaProvider>
   );
 }
