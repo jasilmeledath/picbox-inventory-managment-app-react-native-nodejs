@@ -700,8 +700,8 @@ async function generateInvoicePDF(invoice, companyCredential) {
       timeout: 60000 // 60 seconds explicit timeout
     });
     
-    // Wait a bit for any images to load
-    await page.waitForTimeout(1000); // 1 second buffer
+    // Wait a bit for any images to load using standard Promise
+    await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second buffer
     
     // Generate PDF
     const pdfBuffer = await page.pdf({
