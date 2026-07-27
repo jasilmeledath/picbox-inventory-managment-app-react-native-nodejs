@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "run-expo-web",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"web",
+				"--",
+				"--port",
+				"19006"
+			],
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}
