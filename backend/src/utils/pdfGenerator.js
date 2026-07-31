@@ -679,20 +679,11 @@ async function generateInvoicePDF(invoice, companyCredential) {
       ]
     };
 
-    // Set explicit executable path from Puppeteer's cache for Render.com
-    // Check if running on Render (RENDER environment variable exists)
+    // For Render.com: Don't set executablePath, let Puppeteer auto-detect
+    // Puppeteer will use the Chrome installed via postinstall script
     if (process.env.RENDER || process.env.HOME === '/opt/render') {
-      // Use Puppeteer's built-in executablePath() method to find Chrome
-      // This automatically finds the correct Chrome version
-      try {
-        const puppeteerPath = require('puppeteer');
-        const executablePath = puppeteerPath.executablePath();
-        console.log(`🔍 Using Puppeteer's detected Chrome path: ${executablePath}`);
-        puppeteerConfig.executablePath = executablePath;
-      } catch (error) {
-        console.warn('⚠️ Could not detect Chrome path, using default Puppeteer behavior');
-        // Let Puppeteer use its default path detection
-      }
+      console.log('🌐 Running on Render.com - using Puppeteer auto-detection');
+      // Don't set executablePath - let Puppeteer find Chrome automatically
     }
 
     console.log('🚀 Launching Puppeteer browser...');
