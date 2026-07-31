@@ -12,11 +12,11 @@ export const storage = {
   async getApiBaseUrl(): Promise<string> {
     try {
       const url = await AsyncStorage.getItem(KEYS.API_BASE_URL);
-      // Using your Mac's IP address for physical device testing
-      return url || 'http://192.168.0.107:3000/api';
+      // Production API URL - Render hosted backend
+      return url || 'https://picbox-inventory-managment-app-react.onrender.com/api';
     } catch (error) {
       console.error('Error getting API base URL:', error);
-      return 'http://192.168.0.107:3000/api';
+      return 'https://picbox-inventory-managment-app-react.onrender.com/api';
     }
   },
 

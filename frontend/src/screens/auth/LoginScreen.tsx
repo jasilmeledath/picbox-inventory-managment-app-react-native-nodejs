@@ -28,7 +28,7 @@ export default function LoginScreen() {
   const [apiUrl, setApiUrl] = useState('');
   const [currentApiUrl, setCurrentApiUrl] = useState('');
 
-  const { login, loginAsDemo, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading, error, clearError } = useAuthStore();
 
   // Load current API URL on mount
   useEffect(() => {
@@ -85,20 +85,6 @@ export default function LoginScreen() {
       Alert.alert(
         'Login Failed',
         error.message || 'Invalid email or password',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    clearError();
-
-    try {
-      await loginAsDemo();
-    } catch (error: any) {
-      Alert.alert(
-        'Demo Login Failed',
-        error.message || 'Unable to open the demo dashboard',
         [{ text: 'OK' }]
       );
     }
@@ -222,21 +208,6 @@ export default function LoginScreen() {
             disabled={isLoading}
             style={styles.loginButton}
           />
-
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={handleDemoLogin}
-            disabled={isLoading}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.demoButtonText}>Use Demo Login</Text>
-          </TouchableOpacity>
-
-          <View style={styles.demoInfoBox}>
-            <Text style={styles.demoInfoTitle}>Demo account for screenshots</Text>
-            <Text style={styles.demoInfoText}>Email: navas@echosounds.com</Text>
-            <Text style={styles.demoInfoText}>Password: echo@123</Text>
-          </View>
         </Card>
 
         {/* Footer */}
@@ -393,39 +364,6 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginTop: spacing.md,
-  },
-  demoButton: {
-    marginTop: spacing.md,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    backgroundColor: colors.primary + '10',
-  },
-  demoButtonText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  demoInfoBox: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  demoInfoTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  demoInfoText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
   },
   infoBox: {
     backgroundColor: colors.primary + '10',

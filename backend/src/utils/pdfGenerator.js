@@ -654,8 +654,13 @@ async function generateInvoicePDF(invoice, companyCredential) {
   let browser;
   
   try {
+    console.log('=== PDF Generation Started ===');
+    console.log(`Invoice #${invoice.invoice_number} for ${invoice.customer_name}`);
+    console.log(`Brand: ${invoice.brand_type}, Status: ${invoice.status}`);
+    
     // Generate HTML
     const html = await generateInvoiceHTML(invoice, companyCredential);
+    console.log('✅ HTML template generated');
     
     // Launch browser with production-ready settings
     // Explicitly set executable path for Render.com deployment
@@ -677,33 +682,44 @@ async function generateInvoicePDF(invoice, companyCredential) {
     // Set explicit executable path from Puppeteer's cache for Render.com
     // Check if running on Render (RENDER environment variable exists)
     if (process.env.RENDER || process.env.HOME === '/opt/render') {
-      const chromePath = path.join(
-        process.env.HOME || '/opt/render',
-        '.cache/puppeteer/chrome/linux-141.0.7390.76/chrome-linux64/chrome'
-      );
-      console.log(`🔍 Setting Chrome path for Render: ${chromePath}`);
-      puppeteerConfig.executablePath = chromePath;
+      // Use Puppeteer's built-in executablePath() method to find Chrome
+      // This automatically finds the correct Chrome version
+      try {
+        const puppeteerPath = require('puppeteer');
+        const executablePath = puppeteerPath.executablePath();
+        console.log(`🔍 Using Puppeteer's detected Chrome path: ${executablePath}`);
+        puppeteerConfig.executablePath = executablePath;
+      } catch (error) {
+        console.warn('⚠️ Could not detect Chrome path, using default Puppeteer behavior');
+        // Let Puppeteer use its default path detection
+      }
     }
 
+    console.log('🚀 Launching Puppeteer browser...');
     browser = await puppeteer.launch(puppeteerConfig);
+    console.log('✅ Browser launched successfully');
     
     const page = await browser.newPage();
+    console.log('✅ New page created');
     
     // Set longer timeout for slow servers (Render free tier)
-    page.setDefaultNavigationTimeout(60000); // 60 seconds
-    page.setDefaultTimeout(60000); // 60 seconds
+    page.setDefaultNavigationTimeout(120000); // 120 seconds (2 minutes)
+    page.setDefaultTimeout(120000); // 120 seconds
     
     // Set content with faster wait condition
     // Use 'domcontentloaded' instead of 'networkidle0' for better performance
+    console.log('📄 Setting page content...');
     await page.setContent(html, {
       waitUntil: 'domcontentloaded', // Faster than networkidle0
-      timeout: 60000 // 60 seconds explicit timeout
+      timeout: 120000 // 120 seconds explicit timeout
     });
+    console.log('✅ Page content set');
     
     // Wait a bit for any images to load using standard Promise
-    await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second buffer
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second buffer for logo loading
     
     // Generate PDF
+    console.log('🖨️ Generating PDF...');
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -717,13 +733,25 @@ async function generateInvoicePDF(invoice, companyCredential) {
       }
     });
     
+    console.log(`✅ PDF generated successfully! Size: ${pdfBuffer.length} bytes`);
+    
     await browser.close();
+    console.log('✅ Browser closed');
     
     return pdfBuffer;
   } catch (error) {
+    console.error('❌ PDF Generation Error:', error.message);
+    console.error('Error stack:', error.stack);
+    
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+        console.log('🧹 Browser closed after error');
+      } catch (closeError) {
+        console.error('⚠️ Error closing browser:', closeError.message);
+      }
     }
+    
     throw error;
   }
 }

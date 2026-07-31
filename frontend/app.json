@@ -2,7 +2,7 @@
   "expo": {
     "name": "PicBox Inventory",
     "slug": "picbox-inventory",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "default",
     "icon": "./assets/logos/app-icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.echosounds.picbox",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/logos/app-icon.png",
         "backgroundColor": "#ffffff"
