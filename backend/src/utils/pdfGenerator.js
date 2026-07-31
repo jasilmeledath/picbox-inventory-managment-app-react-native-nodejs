@@ -720,26 +720,38 @@ async function generateInvoicePDF(invoice, companyCredential) {
       
     } catch (puppeteerError) {
       console.error('⚠️ Puppeteer failed:', puppeteerError.message);
-      console.log('🔄 Attempting Node.js server-side PDF generation...');
+      console.log('🔄 Attempting html-pdf library (no Chrome needed)...');
       
-      // Fallback: Use native Node PDF library (no Chrome needed)
-      const nodeHtmlToImage = require('node-html-to-image');
+      // Fallback: Use html-pdf library (lightweight, no Chrome)
+      const htmlPdf = require('html-pdf');
       
-      try {
-        const pdfBuffer = await nodeHtmlToImage({
-          html: html,
-          type: 'png' // Generate as PNG first, then convert
+      return new Promise((resolve, reject) => {
+        const pdfOptions = {
+          format: 'A4',
+          orientation: 'portrait',
+          border: {
+            top: '15mm',
+            right: '15mm',
+            bottom: '15mm',
+            left: '15mm'
+          },
+          timeout: 120000 // 120 seconds
+        };
+        
+        htmlPdf.create(html, pdfOptions).toBuffer((err, buffer) => {
+          if (err) {
+            console.error('⚠️ html-pdf also failed:', err.message);
+            console.log('🆘 Using final fallback: serving HTML as file');
+            
+            // Last resort: Return HTML (user can open with browser)
+            resolve(Buffer.from(html, 'utf-8'));
+            return;
+          }
+          
+          console.log(`✅ PDF generated with html-pdf! Size: ${buffer.length} bytes`);
+          resolve(buffer);
         });
-        
-        console.log(`✅ PDF generated with fallback method! Size: ${pdfBuffer.length} bytes`);
-        return pdfBuffer;
-      } catch (fallbackError) {
-        console.error('⚠️ Fallback also failed:', fallbackError.message);
-        
-        // Last resort: Return HTML as downloadable text
-        console.log('🆘 Using final fallback: serving HTML as file');
-        return Buffer.from(html, 'utf-8');
-      }
+      });
     }
     
   } catch (error) {
