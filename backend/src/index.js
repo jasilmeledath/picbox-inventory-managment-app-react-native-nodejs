@@ -14,27 +14,20 @@ const swaggerSpec = require('./config/swagger');
 // Load environment variables
 dotenv.config();
 
-// Install Chrome for Puppeteer on Render if not already installed
+// Install Chrome for Puppeteer on Render - ALWAYS run on Render
 const installChromeOnRender = () => {
   if (process.env.RENDER || process.env.HOME === '/opt/render') {
-    const chromePath = path.join(
-      process.env.HOME || '/opt/render',
-      '.cache/puppeteer/chrome/linux-141.0.7390.76/chrome-linux64/chrome'
-    );
-    
-    if (!fs.existsSync(chromePath)) {
-      logger.info('🌐 Chrome not found, installing for Puppeteer...');
-      try {
-        execSync('npx puppeteer browsers install chrome', { 
-          stdio: 'inherit',
-          timeout: 300000 // 5 minute timeout
-        });
-        logger.info('✅ Chrome installed successfully');
-      } catch (error) {
-        logger.error('❌ Failed to install Chrome:', error);
-      }
-    } else {
-      logger.info('✅ Chrome already installed at runtime');
+    logger.info('🌐 Running on Render - ensuring Chrome is installed...');
+    try {
+      // Always install Chrome on startup (Render's filesystem is ephemeral)
+      execSync('npx puppeteer browsers install chrome', { 
+        stdio: 'inherit',
+        timeout: 300000 // 5 minute timeout
+      });
+      logger.info('✅ Chrome installed/verified successfully');
+    } catch (error) {
+      logger.error('❌ Failed to install Chrome:', error);
+      // Continue anyway - app can still run without PDF generation
     }
   }
 };
