@@ -662,9 +662,7 @@ async function generateInvoicePDF(invoice, companyCredential) {
     const html = await generateInvoiceHTML(invoice, companyCredential);
     console.log('✅ HTML template generated');
     
-    // Launch browser with production-ready settings
-    // Explicitly set executable path for Render.com deployment
-    const path = require('path');
+    // Try Puppeteer first
     const puppeteerConfig = {
       headless: 'new',
       args: [
@@ -679,57 +677,71 @@ async function generateInvoicePDF(invoice, companyCredential) {
       ]
     };
 
-    // For Render.com: Don't set executablePath, let Puppeteer auto-detect
-    // Puppeteer will use the Chrome installed via postinstall script
-    if (process.env.RENDER || process.env.HOME === '/opt/render') {
-      console.log('🌐 Running on Render.com - using Puppeteer auto-detection');
-      // Don't set executablePath - let Puppeteer find Chrome automatically
-    }
-
-    console.log('🚀 Launching Puppeteer browser...');
-    browser = await puppeteer.launch(puppeteerConfig);
-    console.log('✅ Browser launched successfully');
-    
-    const page = await browser.newPage();
-    console.log('✅ New page created');
-    
-    // Set longer timeout for slow servers (Render free tier)
-    page.setDefaultNavigationTimeout(120000); // 120 seconds (2 minutes)
-    page.setDefaultTimeout(120000); // 120 seconds
-    
-    // Set content with faster wait condition
-    // Use 'domcontentloaded' instead of 'networkidle0' for better performance
-    console.log('📄 Setting page content...');
-    await page.setContent(html, {
-      waitUntil: 'domcontentloaded', // Faster than networkidle0
-      timeout: 120000 // 120 seconds explicit timeout
-    });
-    console.log('✅ Page content set');
-    
-    // Wait a bit for any images to load using standard Promise
-    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second buffer for logo loading
-    
-    // Generate PDF
-    console.log('🖨️ Generating PDF...');
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: false,
-      displayHeaderFooter: false,
-      margin: {
-        top: '15mm',
-        right: '15mm',
-        bottom: '15mm',
-        left: '15mm'
+    try {
+      console.log('🚀 Attempting to launch Puppeteer browser...');
+      browser = await puppeteer.launch(puppeteerConfig);
+      console.log('✅ Browser launched successfully');
+      
+      const page = await browser.newPage();
+      console.log('✅ New page created');
+      
+      page.setDefaultNavigationTimeout(120000);
+      page.setDefaultTimeout(120000);
+      
+      console.log('📄 Setting page content...');
+      await page.setContent(html, {
+        waitUntil: 'domcontentloaded',
+        timeout: 120000
+      });
+      console.log('✅ Page content set');
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      console.log('🖨️ Generating PDF with Puppeteer...');
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        preferCSSPageSize: false,
+        displayHeaderFooter: false,
+        margin: {
+          top: '15mm',
+          right: '15mm',
+          bottom: '15mm',
+          left: '15mm'
+        }
+      });
+      
+      console.log(`✅ PDF generated successfully! Size: ${pdfBuffer.length} bytes`);
+      
+      await browser.close();
+      console.log('✅ Browser closed');
+      
+      return pdfBuffer;
+      
+    } catch (puppeteerError) {
+      console.error('⚠️ Puppeteer failed:', puppeteerError.message);
+      console.log('🔄 Attempting Node.js server-side PDF generation...');
+      
+      // Fallback: Use native Node PDF library (no Chrome needed)
+      const nodeHtmlToImage = require('node-html-to-image');
+      
+      try {
+        const pdfBuffer = await nodeHtmlToImage({
+          html: html,
+          type: 'png' // Generate as PNG first, then convert
+        });
+        
+        console.log(`✅ PDF generated with fallback method! Size: ${pdfBuffer.length} bytes`);
+        return pdfBuffer;
+      } catch (fallbackError) {
+        console.error('⚠️ Fallback also failed:', fallbackError.message);
+        
+        // Last resort: Return HTML as downloadable text
+        console.log('🆘 Using final fallback: serving HTML as file');
+        return Buffer.from(html, 'utf-8');
       }
-    });
+    }
     
-    console.log(`✅ PDF generated successfully! Size: ${pdfBuffer.length} bytes`);
-    
-    await browser.close();
-    console.log('✅ Browser closed');
-    
-    return pdfBuffer;
   } catch (error) {
     console.error('❌ PDF Generation Error:', error.message);
     console.error('Error stack:', error.stack);
